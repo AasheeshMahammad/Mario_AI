@@ -1,5 +1,4 @@
 gym
 nes_py
-matplotlib
 gym_super_mario_bros
 stable-baselines3[extra]
