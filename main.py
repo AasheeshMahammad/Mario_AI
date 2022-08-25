@@ -4,6 +4,7 @@ from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 from gym.wrappers import GrayScaleObservation  # reinforcement api
 from stable_baselines3.common.vec_env import vec_frame_stack, dummy_vec_env # Pytorch version of Stable Baselines
 import os
+from stable_baselines3.common.vec_env import subproc_vec_env
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
@@ -42,26 +43,33 @@ def game():
         env.close()'''
     return env
 
-def preprocess(env):
+def preprocess(num_cpus=4, test=False):
     #plt.imshow(env.reset())
     #plt.pause(5)
-    env = GrayScaleObservation(env,keep_dim=True) # reduces color space => r,g,b - > w/b
     #plt.imshow(env.reset())
     #plt.pause(5)
     #print([env],[lambda : env])
-    env = dummy_vec_env.DummyVecEnv([lambda :env])
-    env = vec_frame_stack.VecFrameStack(env, 4, channels_order='last') # number of stack to remember
+    if not test:
+        env = [lambda : GrayScaleObservation(game(),keep_dim=True) for _ in range(num_cpus)]
+        env = subproc_vec_env.SubprocVecEnv(env)
+    else:
+        env = game()
+        env = dummy_vec_env.DummyVecEnv(env)
+    #env = vec_frame_stack.VecFrameStack(env, 4, channels_order='last') # number of stack to remember
     #print(env.reset().shape)
     return env
 
-def learn(env):
-    callBack = TrainAndLoggingCallback(checkFreq=10000,savePath=CHECKPOINT_DIR)
-    model =  PPO('CnnPolicy', env, verbose=1, tensorboard_log=LOG_DIR, learning_rate=10**-6, n_steps=512)
-    model.learn(total_timesteps=2*10**4, callback=callBack)
+def learn():
+    env = preprocess()
+    callBack = TrainAndLoggingCallback(checkFreq=5000//4,savePath=CHECKPOINT_DIR)
+    model =  PPO('CnnPolicy', env, verbose=1, learning_rate=10**-4, n_steps=512,device='cuda')
+    model.learn(total_timesteps=5*10**4, callback=callBack)
+    env.close()
     
     
-def test(env):
-    model = PPO.load('./train/best_model_20000')
+def test():
+    env = preprocess(test=True)
+    model = PPO.load('./train/best_model_10000')
     state = env.reset()
     try:
         while True:
@@ -72,10 +80,8 @@ def test(env):
         env.close()
 
 def main():
-    env = game()
-    env = preprocess(env)
-    learn(env)
-    test(env)
+    #learn()
+    test()
 
 
 if __name__ == '__main__':
